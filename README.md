@@ -297,7 +297,7 @@ We welcome contributions! Please follow these guidelines:
 - Use proxies if scraping at scale
 
 ### **Liability**
-The developers of this tool are not responsible for:
+The developer of this tool are not responsible for:
 - Misuse of the software
 - Violations of website terms of service
 - Legal issues arising from improper usage
@@ -316,4 +316,4 @@ For questions, issues, or contributions:
 
 **Made with ❤️ for the business research community**
 
-*Last updated: January 2024*
+*Last updated: July 2025*
