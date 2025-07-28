@@ -148,30 +148,68 @@ class XLSXMerger {
       // Create workbook
       const workbook = XLSX.utils.book_new();
 
+      // Re-number all records with continuous numbering
+      const renumberedData = this.renumberRecords(allData);
+
       if (separateSheets && Object.keys(sheetData).length > 1) {
-        // Create separate sheets for each source
+        // Create separate sheets for each source with continuous numbering
+        let currentNumber = 1;
         Object.keys(sheetData).forEach(source => {
-          const worksheet = XLSX.utils.json_to_sheet(sheetData[source]);
+          const sourceData = this.renumberRecords(sheetData[source], currentNumber);
+          currentNumber += sourceData.length;
+          
+          const worksheet = XLSX.utils.json_to_sheet(sourceData);
           this.formatWorksheet(worksheet);
           XLSX.utils.book_append_sheet(workbook, worksheet, this.sanitizeSheetName(source));
-          console.log(`📄 Created sheet "${source}" with ${sheetData[source].length} records`);
+          console.log(`📄 Created sheet "${source}" with ${sourceData.length} records`);
         });
 
-        // Also create a combined sheet
-        const combinedWorksheet = XLSX.utils.json_to_sheet(allData);
+        // Also create a combined sheet with continuous numbering
+        const combinedWorksheet = XLSX.utils.json_to_sheet(renumberedData);
         this.formatWorksheet(combinedWorksheet);
         XLSX.utils.book_append_sheet(workbook, combinedWorksheet, 'All_Combined');
-        console.log(`📄 Created combined sheet with ${allData.length} records`);
+        console.log(`📄 Created combined sheet with ${renumberedData.length} records`);
       } else {
-        // Single sheet with all data
-        const worksheet = XLSX.utils.json_to_sheet(allData);
+        // Single sheet with all data and continuous numbering
+        const worksheet = XLSX.utils.json_to_sheet(renumberedData);
         this.formatWorksheet(worksheet);
         XLSX.utils.book_append_sheet(workbook, worksheet, 'Contacts');
-        console.log(`📄 Created single sheet with ${allData.length} records`);
+        console.log(`📄 Created single sheet with ${renumberedData.length} records`);
       }
 
-      // Save XLSX file
-      const outputPath = path.join(this.outputDir, outputFileName);
+      // Save XLSX file in the appropriate location folder
+      let outputPath;
+      if (csvFiles.length > 0) {
+        // Extract location from the first CSV file to determine where to save
+        const firstFile = csvFiles[0];
+        const location = this.extractLocationFromFilePath(firstFile);
+        
+        if (location.city !== 'Unknown') {
+          if (pattern && pattern !== 'all') {
+            // For specific sources (yellowpages, manta), save in source/location folder
+            const sourceFolderName = this.getSourceFolderName(pattern);
+            const locationFolderName = `${location.city} ${location.state}`;
+            const targetDir = path.join(this.outputDir, sourceFolderName, locationFolderName);
+            await fs.ensureDir(targetDir);
+            outputPath = path.join(targetDir, outputFileName);
+          } else {
+            // For 'all' sources, determine the primary source and save in that location
+            const primarySource = this.determinePrimarySource(csvFiles);
+            const sourceFolderName = this.getSourceFolderName(primarySource);
+            const locationFolderName = `${location.city} ${location.state}`;
+            const targetDir = path.join(this.outputDir, sourceFolderName, locationFolderName);
+            await fs.ensureDir(targetDir);
+            outputPath = path.join(targetDir, outputFileName);
+          }
+        } else {
+          // Fallback to root directory if location can't be determined
+          outputPath = path.join(this.outputDir, outputFileName);
+        }
+      } else {
+        // No CSV files found, save in root directory
+        outputPath = path.join(this.outputDir, outputFileName);
+      }
+      
       XLSX.writeFile(workbook, outputPath);
 
       console.log(`✅ Successfully merged ${csvFiles.length} CSV files into XLSX`);
@@ -259,6 +297,100 @@ class XLSXMerger {
       }
     }
     return { city: 'Unknown', state: 'XX' };
+  }
+
+  /**
+   * Extract location from a single CSV file path
+   * @param {string} filePath - CSV file path
+   * @returns {Object} Location info {city, state}
+   */
+  extractLocationFromFilePath(filePath) {
+    const fileName = path.basename(filePath);
+    // Look for pattern like "yellowpages_Anchorage_AK_contacts_Page1.csv"
+    const match = fileName.match(/(?:yellowpages|manta)_([^_]+)_([^_]+)_contacts/);
+    if (match) {
+      return {
+        city: match[1],
+        state: match[2]
+      };
+    }
+    return { city: 'Unknown', state: 'XX' };
+  }
+
+  /**
+   * Get proper source folder name
+   * @param {string} source - Source name
+   * @returns {string} Formatted source folder name
+   */
+  getSourceFolderName(source) {
+    switch (source.toLowerCase()) {
+      case 'yellowpages':
+        return 'YellowPages';
+      case 'manta':
+        return 'Manta';
+      default:
+        return source.charAt(0).toUpperCase() + source.slice(1);
+    }
+  }
+
+  /**
+   * Determine primary source from CSV files (for 'all' merges)
+   * Priority: YellowPages > Manta > Others
+   * @param {Array} csvFiles - Array of CSV file paths
+   * @returns {string} Primary source name
+   */
+  determinePrimarySource(csvFiles) {
+    const sources = csvFiles.map(file => {
+      const fileName = path.basename(file);
+      if (fileName.toLowerCase().includes('yellowpages')) return 'yellowpages';
+      if (fileName.toLowerCase().includes('manta')) return 'manta';
+      return 'unknown';
+    });
+
+    // Priority order: yellowpages first, then manta
+    if (sources.includes('yellowpages')) return 'yellowpages';
+    if (sources.includes('manta')) return 'manta';
+    return 'yellowpages'; // Default fallback
+  }
+
+  /**
+   * Renumber records with continuous numbering
+   * @param {Array} records - Array of record objects
+   * @param {number} startNumber - Starting number (default: 1)
+   * @returns {Array} Records with updated numbering
+   */
+  renumberRecords(records, startNumber = 1) {
+    return records.map((record, index) => {
+      const newRecord = { ...record };
+      
+      // Update various possible number fields
+      if ('No.' in newRecord) {
+        newRecord['No.'] = startNumber + index;
+      }
+      if ('no' in newRecord) {
+        newRecord['no'] = startNumber + index;
+      }
+      if ('number' in newRecord) {
+        newRecord['number'] = startNumber + index;
+      }
+      if ('Number' in newRecord) {
+        newRecord['Number'] = startNumber + index;
+      }
+      if ('S.No' in newRecord) {
+        newRecord['S.No'] = startNumber + index;
+      }
+      if ('Sr.No' in newRecord) {
+        newRecord['Sr.No'] = startNumber + index;
+      }
+      if ('ID' in newRecord) {
+        newRecord['ID'] = startNumber + index;
+      }
+      if ('id' in newRecord) {
+        newRecord['id'] = startNumber + index;
+      }
+      
+      return newRecord;
+    });
   }
 
   /**

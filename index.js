@@ -34,47 +34,97 @@ program
   .description('Scrape contact information from Yellow Pages')
   .option('-s, --search <term>', 'Search term (e.g., "restaurants", "dentists")', 'restaurants')
   .option('-l, --location <location>', 'Location to search in', 'New York, NY')
-  .option('-p, --page <number>', 'Specific page number to scrape', '1')
+  .option('-p, --pages <pages>', 'Page number(s) to scrape (single: "5" or multiple: "1,2,3,4,5")', '1')
   .action(async (options) => {
     console.log(chalk.yellow('🟡 Starting Yellow Pages scraper...'));
     console.log(chalk.gray(`Search: ${options.search}`));
     console.log(chalk.gray(`Location: ${options.location}`));
-    console.log(chalk.gray(`Page: ${options.page}`));
+    
+    // Parse page numbers (handle both single and comma-separated)
+    const pageNumbers = options.pages.split(',').map(p => parseInt(p.trim())).filter(p => !isNaN(p) && p > 0);
+    
+    if (pageNumbers.length === 0) {
+      console.error(chalk.red('❌ Invalid page numbers provided'));
+      process.exit(1);
+    }
+    
+    console.log(chalk.gray(`Pages: ${pageNumbers.join(', ')}`));
     console.log('');
 
-    const scraper = new YellowPagesScraper();
+    const csvPaths = [];
+    let totalContacts = 0;
     
     try {
-      const csvPath = await scraper.scrape({
-        searchTerm: options.search,
-        location: options.location,
-        pageNumber: parseInt(options.page)
-      });
-      
-      if (csvPath) {
-        console.log(chalk.green(`\n🎉 Success! Results exported to: ${csvPath}`));
-      } else {
-        console.log(chalk.yellow('\n⚠️ No contacts found to export'));
+      for (let i = 0; i < pageNumbers.length; i++) {
+        const pageNumber = pageNumbers[i];
+        console.log(chalk.cyan(`\n📄 Processing page ${pageNumber} (${i + 1}/${pageNumbers.length})...`));
+        
+        // Create a new scraper instance for each page to avoid contact accumulation
+        const scraper = new YellowPagesScraper();
+        
+        const csvPath = await scraper.scrape({
+          searchTerm: options.search,
+          location: options.location,
+          pageNumber: pageNumber
+        });
+        
+        if (csvPath) {
+          csvPaths.push(csvPath);
+          console.log(chalk.green(`✅ Page ${pageNumber} completed: ${csvPath}`));
+          
+          // Get contact count from this page
+          totalContacts += scraper.scrapedContacts.length;
+        } else {
+          console.log(chalk.yellow(`⚠️ No contacts found on page ${pageNumber}`));
+        }
+        
+        // Add delay between pages to be respectful
+        if (i < pageNumbers.length - 1) {
+          console.log(chalk.gray('⏳ Waiting 3 seconds before next page...'));
+          await new Promise(resolve => setTimeout(resolve, 3000));
+        }
       }
+      
+      // Summary
+      console.log(chalk.green(`\n🎉 Scraping completed!`));
+      console.log(chalk.green(`📊 Total pages processed: ${pageNumbers.length}`));
+      console.log(chalk.green(`📄 CSV files created: ${csvPaths.length}`));
+      console.log(chalk.green(`👥 Total contacts found: ${totalContacts}`));
+      
+      if (csvPaths.length > 0) {
+        console.log(chalk.cyan('\n📁 Created files:'));
+        csvPaths.forEach(path => console.log(chalk.gray(`  • ${path}`)));
+      }
+      
     } catch (error) {
       console.error(chalk.red(`\n❌ Error: ${error.message}`));
       process.exit(1);
     }
   });
 
-// Manta scraping command (still uses multi-page approach)
+// Manta scraping command
 program
   .command('manta')
   .alias('m')
   .description('Scrape contact information from Manta')
   .option('-s, --search <term>', 'Search term (e.g., "restaurants", "dentists")', 'restaurants')
   .option('-l, --location <location>', 'Location to search in', 'New York, NY')
-  .option('-p, --pages <number>', 'Maximum number of pages to scrape', '5')
+  .option('-p, --pages <pages>', 'Maximum number of pages to scrape (single: "5" or range: "1-5")', '5')
   .action(async (options) => {
     console.log(chalk.blue('🔵 Starting Manta scraper...'));
     console.log(chalk.gray(`Search: ${options.search}`));
     console.log(chalk.gray(`Location: ${options.location}`));
-    console.log(chalk.gray(`Max Pages: ${options.pages}`));
+    
+    // Parse max pages (handle single number or range)
+    let maxPages = 5;
+    if (options.pages.includes('-')) {
+      const [start, end] = options.pages.split('-').map(p => parseInt(p.trim()));
+      maxPages = Math.max(end - start + 1, 1);
+    } else {
+      maxPages = parseInt(options.pages) || 5;
+    }
+    
+    console.log(chalk.gray(`Max Pages: ${maxPages}`));
     console.log('');
 
     const scraper = new MantaScraper();
@@ -83,7 +133,7 @@ program
       const csvPath = await scraper.scrape({
         searchTerm: options.search,
         location: options.location,
-        maxPages: parseInt(options.pages)
+        maxPages: maxPages
       });
       
       if (csvPath) {
