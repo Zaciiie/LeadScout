@@ -152,8 +152,8 @@ class BaseScraper {
     try {
       console.log(`🌐 Navigating to: ${url}`);
       
-      // Add random delay before navigation (simulate thinking time)
-      const preNavDelay = 1000 + Math.random() * 2000; // 1-3 seconds
+      // Add random delay before navigation (simulate thinking time) - reduced for speed
+      const preNavDelay = 500 + Math.random() * 1000; // 0.5-1.5 seconds (reduced from 1-3 seconds)
       console.log(`⏳ Pre-navigation delay: ${Math.round(preNavDelay)}ms`);
       await this.page.waitForTimeout(preNavDelay);
       
@@ -167,7 +167,8 @@ class BaseScraper {
       await this.simulateHumanBehavior();
       
       // Wait for page to fully load
-      await this.page.waitForTimeout(config.delays.pageLoad);
+      const currentDelays = config.delays[config.mode] || config.delays.fast;
+      await this.page.waitForTimeout(currentDelays.pageLoad);
       
       return true;
     } catch (error) {
@@ -177,27 +178,27 @@ class BaseScraper {
   }
 
   /**
-   * Simulate human-like behavior on the page
+   * Simulate human-like behavior on the page (optimized for speed)
    */
   async simulateHumanBehavior() {
     try {
-      // Random mouse movements
-      const moves = 2 + Math.floor(Math.random() * 3); // 2-4 moves
+      // Reduced mouse movements for speed
+      const moves = 1 + Math.floor(Math.random() * 2); // 1-2 moves (reduced from 2-4)
       for (let i = 0; i < moves; i++) {
         const x = Math.random() * 1200;
         const y = Math.random() * 800;
         await this.page.mouse.move(x, y);
-        await this.page.waitForTimeout(100 + Math.random() * 200);
+        await this.page.waitForTimeout(50 + Math.random() * 100); // Reduced delay
       }
       
-      // Random scrolling
-      const scrolls = 1 + Math.floor(Math.random() * 2); // 1-2 scrolls
+      // Minimal scrolling for speed
+      const scrolls = 1; // Fixed to 1 scroll (reduced from 1-2)
       for (let i = 0; i < scrolls; i++) {
-        const scrollY = Math.random() * 500;
+        const scrollY = Math.random() * 300; // Reduced scroll distance
         await this.page.evaluate((y) => {
           window.scrollBy(0, y);
         }, scrollY);
-        await this.page.waitForTimeout(500 + Math.random() * 1000);
+        await this.page.waitForTimeout(200 + Math.random() * 300); // Reduced delay
       }
       
       // Scroll back to top
@@ -247,7 +248,8 @@ class BaseScraper {
       });
     });
     
-    await this.page.waitForTimeout(config.delays.scrollDelay);
+    const currentDelays = config.delays[config.mode] || config.delays.fast;
+    await this.page.waitForTimeout(currentDelays.scrollDelay);
   }
 
   /**
@@ -289,15 +291,17 @@ class BaseScraper {
 
   /**
    * Export all scraped contacts to CSV
+   * @param {number} pageNumber - Optional page number for filename
+   * @param {string} location - Optional location string for filename
    * @returns {string} Path to exported CSV file
    */
-  async exportContacts() {
+  async exportContacts(pageNumber = null, location = null) {
     if (this.scrapedContacts.length === 0) {
       console.log('⚠️ No contacts to export');
       return null;
     }
 
-    return await this.csvExporter.exportContacts(this.scrapedContacts, this.sourceName);
+    return await this.csvExporter.exportContacts(this.scrapedContacts, this.sourceName, pageNumber, location);
   }
 
   /**
@@ -328,7 +332,8 @@ class BaseScraper {
    * Add delay between requests
    */
   async delay() {
-    await this.page.waitForTimeout(config.delays.betweenRequests);
+    const currentDelays = config.delays[config.mode] || config.delays.fast;
+    await this.page.waitForTimeout(currentDelays.betweenRequests);
   }
 
   /**

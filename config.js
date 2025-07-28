@@ -27,12 +27,25 @@ module.exports = {
     ignoreHTTPSErrors: true
   },
 
-  // Scraping delays (in milliseconds)
+  // Scraping mode: 'fast' or 'stealth'
+  mode: 'fast', // Change to 'stealth' for more human-like behavior with longer delays
+  
+  // Scraping delays (in milliseconds) - optimized for speed
   delays: {
-    pageLoad: 5000,
-    betweenRequests: 3000,
-    scrollDelay: 2000,
-    humanDelay: 1500 // Random delay to simulate human behavior
+    fast: {
+      pageLoad: 2000,
+      betweenRequests: 1000,
+      scrollDelay: 1000,
+      humanDelay: 500,
+      listingDelay: 250 // Delay between processing listings
+    },
+    stealth: {
+      pageLoad: 5000,
+      betweenRequests: 3000,
+      scrollDelay: 2000,
+      humanDelay: 1500,
+      listingDelay: 1000 // Longer delay for stealth mode
+    }
   },
 
   // Output configuration

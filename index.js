@@ -4,6 +4,7 @@ const { Command } = require('commander');
 const chalk = require('chalk');
 const YellowPagesScraper = require('./scrapers/yellowpages');
 const MantaScraper = require('./scrapers/manta');
+const XLSXMerger = require('./utils/xlsxMerger');
 
 const program = new Command();
 
@@ -156,6 +157,122 @@ program
       });
     } else {
       console.log(chalk.yellow('⚠️ No results were exported'));
+    }
+  });
+
+// Merge CSV files to XLSX command
+program
+  .command('merge')
+  .alias('xlsx')
+  .description('Merge all CSV files into one XLSX file')
+  .option('-s, --source <source>', 'Filter by source (yellowpages, manta, or all)', 'all')
+  .option('-o, --output <filename>', 'Output XLSX filename', 'merged_contacts.xlsx')
+  .option('--separate-sheets', 'Create separate sheets for each source', false)
+  .option('--stats', 'Show statistics about CSV files before merging', false)
+  .action(async (options) => {
+    console.log(chalk.green('📊 Starting CSV to XLSX merge process...'));
+    console.log(chalk.gray(`Source filter: ${options.source}`));
+    console.log(chalk.gray(`Output file: ${options.output}`));
+    console.log(chalk.gray(`Separate sheets: ${options.separateSheets ? 'Yes' : 'No'}`));
+    console.log('');
+
+    const merger = new XLSXMerger();
+    
+    try {
+      // Show statistics if requested
+      if (options.stats) {
+        console.log(chalk.cyan('📈 Getting CSV file statistics...'));
+        const stats = await merger.getStatistics();
+        
+        if (stats) {
+          console.log(chalk.green(`\n📁 Found ${stats.totalFiles} CSV files with ${stats.totalRecords} total records:`));
+          
+          // Show by source
+          Object.keys(stats.sources).forEach(source => {
+            const sourceStats = stats.sources[source];
+            console.log(chalk.blue(`  • ${source}: ${sourceStats.files} files, ${sourceStats.records} records`));
+          });
+          
+          // Show individual files
+          console.log(chalk.gray('\nIndividual files:'));
+          stats.files.forEach(file => {
+            console.log(chalk.gray(`  • ${file.name} (${file.records} records)`));
+          });
+          console.log('');
+        } else {
+          console.log(chalk.yellow('⚠️ Could not get statistics'));
+        }
+      }
+      
+      // Perform merge
+      const xlsxPath = await merger.mergeBySource(options.source, options.separateSheets);
+      
+      if (xlsxPath) {
+        console.log(chalk.green(`\n🎉 Success! XLSX file created: ${xlsxPath}`));
+      } else {
+        console.log(chalk.yellow('\n⚠️ No CSV files found to merge'));
+      }
+    } catch (error) {
+      console.error(chalk.red(`\n❌ Error: ${error.message}`));
+      process.exit(1);
+    }
+  });
+
+// Merge CSV files to XLSX command
+program
+  .command('merge')
+  .alias('xlsx')
+  .description('Merge all CSV files into one XLSX file')
+  .option('-s, --source <source>', 'Filter by source (yellowpages, manta, or all)', 'all')
+  .option('-o, --output <filename>', 'Output XLSX filename', 'merged_contacts.xlsx')
+  .option('--separate-sheets', 'Create separate sheets for each source', false)
+  .option('--stats', 'Show statistics about CSV files before merging', false)
+  .action(async (options) => {
+    console.log(chalk.green('📊 Starting CSV to XLSX merge process...'));
+    console.log(chalk.gray(`Source filter: ${options.source}`));
+    console.log(chalk.gray(`Output file: ${options.output}`));
+    console.log(chalk.gray(`Separate sheets: ${options.separateSheets ? 'Yes' : 'No'}`));
+    console.log('');
+
+    const merger = new XLSXMerger();
+    
+    try {
+      // Show statistics if requested
+      if (options.stats) {
+        console.log(chalk.cyan('📈 Getting CSV file statistics...'));
+        const stats = await merger.getStatistics();
+        
+        if (stats) {
+          console.log(chalk.green(`\n📁 Found ${stats.totalFiles} CSV files with ${stats.totalRecords} total records:`));
+          
+          // Show by source
+          Object.keys(stats.sources).forEach(source => {
+            const sourceStats = stats.sources[source];
+            console.log(chalk.blue(`  • ${source}: ${sourceStats.files} files, ${sourceStats.records} records`));
+          });
+          
+          // Show individual files
+          console.log(chalk.gray('\nIndividual files:'));
+          stats.files.forEach(file => {
+            console.log(chalk.gray(`  • ${file.name} (${file.records} records)`));
+          });
+          console.log('');
+        } else {
+          console.log(chalk.yellow('⚠️ Could not get statistics'));
+        }
+      }
+      
+      // Perform merge
+      const xlsxPath = await merger.mergeBySource(options.source, options.separateSheets);
+      
+      if (xlsxPath) {
+        console.log(chalk.green(`\n🎉 Success! XLSX file created: ${xlsxPath}`));
+      } else {
+        console.log(chalk.yellow('\n⚠️ No CSV files found to merge'));
+      }
+    } catch (error) {
+      console.error(chalk.red(`\n❌ Error: ${error.message}`));
+      process.exit(1);
     }
   });
 

@@ -7,6 +7,8 @@
     "start": "node index.js",
     "scrape:yellowpages": "node scrapers/yellowpages.js",
     "scrape:manta": "node scrapers/manta.js",
+    "merge": "node merge.js",
+    "merge:stats": "node merge.js --stats",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -22,6 +24,8 @@
     "csv-writer": "^1.6.0",
     "fs-extra": "^11.1.1",
     "commander": "^11.1.0",
-    "chalk": "^4.1.2"
+    "chalk": "^4.1.2",
+    "xlsx": "^0.18.5",
+    "csv-parser": "^3.0.0"
   }
 }

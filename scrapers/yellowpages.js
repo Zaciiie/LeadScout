@@ -1,4 +1,5 @@
 const BaseScraper = require('./baseScraper');
+const config = require('../config');
 
 class YellowPagesScraper extends BaseScraper {
   constructor() {
@@ -33,7 +34,13 @@ class YellowPagesScraper extends BaseScraper {
    */
   async extractBusinessInfo(businessElement) {
     try {
-      const businessInfo = await businessElement.evaluate(element => {
+      // Get the element's index or unique identifier to re-query it safely
+      const businessInfo = await this.page.evaluate((element) => {
+        // Make sure element is still valid
+        if (!element || !element.isConnected) {
+          return {};
+        }
+        
         const data = {};
         
         // Business name (clean any numbering)
@@ -61,7 +68,7 @@ class YellowPagesScraper extends BaseScraper {
         data.fullText = element.textContent || element.innerText || '';
         
         return data;
-      });
+      }, businessElement);
       
       return businessInfo;
     } catch (error) {
@@ -79,84 +86,13 @@ class YellowPagesScraper extends BaseScraper {
     try {
       console.log('🔍 Looking for hidden email addresses...');
       
-      // Look for "More Info", "Contact Info", or similar expandable sections
-      const moreInfoSelectors = [
-        'a[href*="mailto:"]',
-        'button[onclick*="mailto:"]',
-        '.more-info a',
-        '.contact-info a',
-        '.additional-info a',
-        '[class*="more"] a',
-        '[class*="contact"] a',
-        '[class*="email"] a',
-        'a[title*="email"]',
-        'a[title*="Email"]',
-        '.info-section a',
-        '.business-info a'
-      ];
-      
-      // First, try to find direct mailto links
-      for (const selector of moreInfoSelectors) {
-        try {
-          const emailLink = await businessElement.$(selector);
-          if (emailLink) {
-            const href = await emailLink.evaluate(el => el.href);
-            if (href && href.startsWith('mailto:')) {
-              const email = href.replace('mailto:', '').split('?')[0].trim();
-              if (email && email.includes('@')) {
-                console.log(`✅ Found email via direct mailto: ${email}`);
-                return email;
-              }
-            }
-          }
-        } catch (error) {
-          // Continue to next selector
+      // Look for email patterns in onclick attributes or data attributes first (safest approach)
+      const emailFromAttributes = await this.page.evaluate((element) => {
+        // Make sure element is still valid
+        if (!element || !element.isConnected) {
+          return null;
         }
-      }
-      
-      // Look for expandable "More Info" sections that might contain email
-      const expandableSelectors = [
-        '.more-info',
-        '.additional-info',
-        '.contact-details',
-        '.business-details',
-        '[class*="more"]',
-        '[class*="expand"]',
-        '.info-toggle'
-      ];
-      
-      for (const selector of expandableSelectors) {
-        try {
-          const expandableSection = await businessElement.$(selector);
-          if (expandableSection) {
-            // Try to click/expand the section
-            try {
-              await expandableSection.click();
-              await this.page.waitForTimeout(1000); // Wait for expansion
-              
-              // Now look for email links in the expanded content
-              const emailLink = await businessElement.$('a[href*="mailto:"]');
-              if (emailLink) {
-                const href = await emailLink.evaluate(el => el.href);
-                if (href && href.startsWith('mailto:')) {
-                  const email = href.replace('mailto:', '').split('?')[0].trim();
-                  if (email && email.includes('@')) {
-                    console.log(`✅ Found email via expanded section: ${email}`);
-                    return email;
-                  }
-                }
-              }
-            } catch (clickError) {
-              // Section might not be clickable, continue
-            }
-          }
-        } catch (error) {
-          // Continue to next selector
-        }
-      }
-      
-      // Look for email patterns in onclick attributes or data attributes
-      const emailFromAttributes = await businessElement.evaluate(element => {
+        
         const allElements = element.querySelectorAll('*');
         for (const el of allElements) {
           // Check onclick attributes
@@ -179,11 +115,50 @@ class YellowPagesScraper extends BaseScraper {
           }
         }
         return null;
-      });
+      }, businessElement);
       
       if (emailFromAttributes) {
         console.log(`✅ Found email via attributes: ${emailFromAttributes}`);
         return emailFromAttributes;
+      }
+      
+      // Look for direct mailto links in the business element
+      const directEmail = await this.page.evaluate((element) => {
+        // Make sure element is still valid
+        if (!element || !element.isConnected) {
+          return null;
+        }
+        
+        const moreInfoSelectors = [
+          'a[href*="mailto:"]',
+          'button[onclick*="mailto:"]',
+          '.more-info a',
+          '.contact-info a',
+          '.additional-info a',
+          '[class*="more"] a',
+          '[class*="contact"] a',
+          '[class*="email"] a',
+          'a[title*="email"]',
+          'a[title*="Email"]',
+          '.info-section a',
+          '.business-info a'
+        ];
+        
+        for (const selector of moreInfoSelectors) {
+          const emailLink = element.querySelector(selector);
+          if (emailLink && emailLink.href && emailLink.href.startsWith('mailto:')) {
+            const email = emailLink.href.replace('mailto:', '').split('?')[0].trim();
+            if (email && email.includes('@')) {
+              return email;
+            }
+          }
+        }
+        return null;
+      }, businessElement);
+      
+      if (directEmail) {
+        console.log(`✅ Found email via direct mailto: ${directEmail}`);
+        return directEmail;
       }
       
       console.log('❌ No hidden email found');
@@ -260,62 +235,77 @@ class YellowPagesScraper extends BaseScraper {
    * @returns {Array} Array of contact objects
    */
   async processBusinessListing(businessElement) {
-    const businessInfo = await this.extractBusinessInfo(businessElement);
-    
-    if (!businessInfo.businessName && !businessInfo.phone) {
-      return [];
-    }
+    try {
+      // Validate element handle before processing
+      const isValid = await this.page.evaluate((element) => {
+        return element && element.isConnected && element.nodeType === Node.ELEMENT_NODE;
+      }, businessElement);
+      
+      if (!isValid) {
+        console.log('⚠️ Skipping invalid or disconnected element');
+        return [];
+      }
+      
+      const businessInfo = await this.extractBusinessInfo(businessElement);
+      
+      if (!businessInfo.businessName && !businessInfo.phone) {
+        return [];
+      }
 
-    // Create a unique identifier for this business to avoid duplicates
-    const businessId = `${businessInfo.businessName || 'unknown'}_${businessInfo.phone || 'no-phone'}_${businessInfo.address || 'no-address'}`;
-    
-    if (this.processedBusinesses.has(businessId)) {
-      console.log(`⏭️ Skipping duplicate business: ${businessInfo.businessName || 'Unknown'}`);
-      return [];
-    }
-    
-    this.processedBusinesses.add(businessId);
+      // Create a unique identifier for this business to avoid duplicates
+      const businessId = `${businessInfo.businessName || 'unknown'}_${businessInfo.phone || 'no-phone'}_${businessInfo.address || 'no-address'}`;
+      
+      if (this.processedBusinesses.has(businessId)) {
+        console.log(`⏭️ Skipping duplicate business: ${businessInfo.businessName || 'Unknown'}`);
+        return [];
+      }
+      
+      this.processedBusinesses.add(businessId);
 
-    // Extract hidden email from More Info sections
-    const hiddenEmail = await this.extractHiddenEmail(businessElement);
-    
-    // Extract contacts from the listing text
-    const contacts = this.contactExtractor.extractAllContacts(businessInfo.fullText, this.sourceName);
-    
-    // If no contacts found from text, create one from available info
-    if (contacts.length === 0 && (businessInfo.businessName || businessInfo.phone)) {
-      contacts.push({
-        sno: '', // Will be filled by CSV exporter
-        businessName: businessInfo.businessName || '',
-        website: businessInfo.website || '',
-        address: businessInfo.address || '',
-        email: hiddenEmail || '',
-        phone: businessInfo.phone || '',
-        source: this.sourceName,
-        scrapedAt: new Date().toISOString()
+      // Extract hidden email from More Info sections
+      const hiddenEmail = await this.extractHiddenEmail(businessElement);
+      
+      // Extract contacts from the listing text
+      const contacts = this.contactExtractor.extractAllContacts(businessInfo.fullText, this.sourceName);
+      
+      // If no contacts found from text, create one from available info
+      if (contacts.length === 0 && (businessInfo.businessName || businessInfo.phone)) {
+        contacts.push({
+          sno: '', // Will be filled by CSV exporter
+          businessName: businessInfo.businessName || '',
+          website: businessInfo.website || '',
+          address: businessInfo.address || '',
+          email: hiddenEmail || '',
+          phone: businessInfo.phone || '',
+          source: this.sourceName,
+          scrapedAt: new Date().toISOString()
+        });
+      }
+
+      // Enhance contacts with business information and hidden email (excluding fullName)
+      return contacts.map(contact => {
+        const enhancedContact = {
+          sno: '', // Will be filled by CSV exporter
+          businessName: contact.businessName || businessInfo.businessName || '',
+          website: contact.website || businessInfo.website || '',
+          address: contact.address || businessInfo.address || '',
+          email: contact.email || hiddenEmail || '',
+          phone: contact.phone || businessInfo.phone || '',
+          source: contact.source || this.sourceName,
+          scrapedAt: contact.scrapedAt || new Date().toISOString()
+        };
+        
+        // Remove fullName if it exists
+        delete enhancedContact.fullName;
+        delete enhancedContact.firstName;
+        delete enhancedContact.lastName;
+        
+        return enhancedContact;
       });
+    } catch (error) {
+      console.error('Error processing business listing:', error.message);
+      return [];
     }
-
-    // Enhance contacts with business information and hidden email (excluding fullName)
-    return contacts.map(contact => {
-      const enhancedContact = {
-        sno: '', // Will be filled by CSV exporter
-        businessName: contact.businessName || businessInfo.businessName || '',
-        website: contact.website || businessInfo.website || '',
-        address: contact.address || businessInfo.address || '',
-        email: contact.email || hiddenEmail || '',
-        phone: contact.phone || businessInfo.phone || '',
-        source: contact.source || this.sourceName,
-        scrapedAt: contact.scrapedAt || new Date().toISOString()
-      };
-      
-      // Remove fullName if it exists
-      delete enhancedContact.fullName;
-      delete enhancedContact.firstName;
-      delete enhancedContact.lastName;
-      
-      return enhancedContact;
-    });
   }
 
   /**
@@ -329,9 +319,9 @@ class YellowPagesScraper extends BaseScraper {
     console.log(`🔧 Attempting to bypass protection page for page ${pageNumber}...`);
     
     try {
-      // Strategy 1: Wait for automatic bypass (Cloudflare usually auto-completes)
+      // Strategy 1: Wait for automatic bypass (Cloudflare usually auto-completes) - reduced wait time
       console.log('⏳ Strategy 1: Waiting for automatic bypass...');
-      await this.page.waitForTimeout(10000); // Wait 10 seconds
+      await this.page.waitForTimeout(5000); // Wait 5 seconds (reduced from 10)
       
       let currentTitle = await this.page.title();
       if (!currentTitle.includes('Attention Required') && !currentTitle.includes('Cloudflare') && !currentTitle.includes('Just a moment')) {
@@ -342,7 +332,7 @@ class YellowPagesScraper extends BaseScraper {
       // Strategy 2: Refresh the page
       console.log('🔄 Strategy 2: Refreshing page...');
       await this.page.reload({ waitUntil: 'domcontentloaded' });
-      await this.page.waitForTimeout(8000);
+      await this.page.waitForTimeout(4000); // Reduced from 8000
       
       currentTitle = await this.page.title();
       if (!currentTitle.includes('Attention Required') && !currentTitle.includes('Cloudflare') && !currentTitle.includes('Just a moment')) {
@@ -352,7 +342,7 @@ class YellowPagesScraper extends BaseScraper {
       
       // Strategy 3: Wait longer and try again
       console.log('⏳ Strategy 3: Extended wait...');
-      await this.page.waitForTimeout(15000); // Wait 15 more seconds
+      await this.page.waitForTimeout(8000); // Wait 8 more seconds (reduced from 15)
       
       currentTitle = await this.page.title();
       if (!currentTitle.includes('Attention Required') && !currentTitle.includes('Cloudflare') && !currentTitle.includes('Just a moment')) {
@@ -365,15 +355,15 @@ class YellowPagesScraper extends BaseScraper {
       const pageUrl = this.buildSearchUrl(searchTerm, location, pageNumber);
       
       // Add extra delay before re-navigation
-      await this.page.waitForTimeout(5000);
+      await this.page.waitForTimeout(2000); // Reduced from 5000
       
       await this.page.goto(pageUrl, { 
         waitUntil: 'domcontentloaded',
-        timeout: 45000 
+        timeout: 30000  // Reduced from 45000
       });
       
-      // Longer wait after navigation
-      await this.page.waitForTimeout(12000);
+      // Wait after navigation
+      await this.page.waitForTimeout(6000); // Reduced from 12000
       
       currentTitle = await this.page.title();
       if (!currentTitle.includes('Attention Required') && !currentTitle.includes('Cloudflare') && !currentTitle.includes('Just a moment')) {
@@ -429,7 +419,7 @@ class YellowPagesScraper extends BaseScraper {
       
       // Wait for page to fully load before processing
       console.log('⏳ Waiting for page to fully load...');
-      await this.page.waitForTimeout(8000);
+      await this.page.waitForTimeout(3000); // Reduced from 8000
       
       // Process the page
       const pageResults = await this.scrapePage();
@@ -450,7 +440,7 @@ class YellowPagesScraper extends BaseScraper {
       let csvPath = null;
       if (pageResults.newContactsCount > 0) {
         console.log('💾 Creating CSV file with results...');
-        csvPath = await this.csvExporter.exportContacts(this.scrapedContacts, this.sourceName);
+        csvPath = await this.csvExporter.exportContacts(this.scrapedContacts, this.sourceName, pageNumber, location);
         console.log(`📄 CSV file created: ${csvPath}`);
       } else {
       console.log('⚠️ No contacts found to export');
@@ -488,7 +478,7 @@ class YellowPagesScraper extends BaseScraper {
     let resultsLoaded = false;
     for (const selector of waitSelectors) {
       try {
-        await this.waitForElement(selector, 3000);
+        await this.waitForElement(selector, 2000); // Reduced from 3000
         console.log(`✅ Found results with selector: ${selector}`);
         resultsLoaded = true;
         break;
@@ -498,8 +488,8 @@ class YellowPagesScraper extends BaseScraper {
     }
     
     if (!resultsLoaded) {
-      console.log('⚠️ No standard selectors found, waiting additional 5 seconds...');
-      await this.page.waitForTimeout(5000);
+      console.log('⚠️ No standard selectors found, waiting additional 2 seconds...'); // Reduced from 5 seconds
+      await this.page.waitForTimeout(2000);
     }
     
     // Get all business listings on current page
@@ -538,30 +528,51 @@ class YellowPagesScraper extends BaseScraper {
 
     console.log(`🏢 Found ${businessListings.length} business listings`);
 
-    // Process each business listing
+    // Process each business listing with optimized approach
     console.log(`🔄 Processing ${businessListings.length} business listings...`);
     let processedCount = 0;
     let newContactsCount = 0;
     
-    for (let i = 0; i < businessListings.length; i++) {
-      try {
-        const contacts = await this.processBusinessListing(businessListings[i]);
+    // Process in smaller batches for better performance
+    const batchSize = 5;
+    for (let batchStart = 0; batchStart < businessListings.length; batchStart += batchSize) {
+      const batchEnd = Math.min(batchStart + batchSize, businessListings.length);
+      const batch = [];
+      
+      // Re-query elements for this batch to avoid stale element issues
+      const currentBusinessListings = await this.page.$$(usedSelector);
+      
+      for (let i = batchStart; i < batchEnd; i++) {
+        if (i >= currentBusinessListings.length) {
+          console.log(`⚠️ Element ${i + 1} no longer available, skipping...`);
+          continue;
+        }
+        
+        batch.push(this.processBusinessListing(currentBusinessListings[i]).catch(error => {
+          console.error(`❌ Error processing listing ${i + 1}:`, error.message);
+          return [];
+        }));
+      }
+      
+      // Process batch in parallel
+      const batchResults = await Promise.all(batch);
+      
+      // Add all contacts from this batch
+      for (const contacts of batchResults) {
         if (contacts.length > 0) {
           this.addContacts(contacts);
           newContactsCount += contacts.length;
           processedCount++;
         }
-        
-        // Show progress every 10 listings
-        if ((i + 1) % 10 === 0) {
-          console.log(`📊 Progress: ${i + 1}/${businessListings.length} listings processed`);
-        }
-        
-        // Random human-like delay between processing listings
-        const randomDelay = 500 + Math.random() * 1500; // 0.5-2 seconds
-        await this.page.waitForTimeout(randomDelay);
-      } catch (error) {
-        console.error(`❌ Error processing listing ${i + 1}:`, error.message);
+      }
+      
+      // Show progress
+      console.log(`📊 Progress: ${Math.min(batchEnd, businessListings.length)}/${businessListings.length} listings processed`);
+      // Small delay between batches
+      if (batchEnd < businessListings.length) {
+      
+        const currentDelays = config.delays[config.mode] || config.delays.fast;
+        await this.page.waitForTimeout(currentDelays.listingDelay);
       }
     }
     

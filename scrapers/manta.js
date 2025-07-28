@@ -537,7 +537,7 @@ class MantaScraper extends BaseScraper {
       console.log(`✅ Scraping completed. Total contacts found: ${this.scrapedContacts.length}`);
       
       // Export contacts to CSV
-      const csvPath = await this.exportContacts();
+      const csvPath = await this.exportContacts(null, location);
       return csvPath;
 
     } catch (error) {

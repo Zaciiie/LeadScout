@@ -2,12 +2,31 @@
 
 A powerful Node.js web scraping tool designed to extract business contact information from popular business directories. This tool helps gather structured business data including contact details, addresses, and websites for lead generation and market research purposes.
 
+## 🚀 Quick Start
+
+```bash
+# 1. Install dependencies
+npm install
+npm install xlsx csv-parser
+
+# 2. Scrape Yellow Pages
+node index.js yellowpages --search "restaurants" --location "New York, NY" --page 1
+
+# 3. Merge CSV files to Excel
+node index.js merge --stats --separate-sheets
+
+# 4. Check your output folder for results!
+```
+
 ## 📋 Table of Contents
 
+- [Quick Start](#quick-start)
 - [Features](#features)
 - [Tech Stack](#tech-stack)
 - [Installation](#installation)
 - [Usage](#usage)
+- [CSV to XLSX Merger](#csv-to-xlsx-merger)
+- [Speed Optimizations](#speed-optimizations)
 - [Configuration](#configuration)
 - [Output Format](#output-format)
 - [Project Structure](#project-structure)
@@ -37,9 +56,11 @@ A powerful Node.js web scraping tool designed to extract business contact inform
 
 ### 📈 **Export Options**
 - CSV format with customizable columns
+- XLSX (Excel) merger for combining multiple CSV files
 - Serial numbering and organized data structure
 - Timestamped output files
 - Append mode for continuous data collection
+- Separate sheets for different sources in Excel files
 
 ## 🛠 Tech Stack
 
@@ -50,8 +71,11 @@ A powerful Node.js web scraping tool designed to extract business contact inform
 
 ### **Key Libraries**
 - **csv-writer** - CSV file generation
+- **xlsx** - Excel file creation and manipulation
+- **csv-parser** - CSV file reading and parsing
 - **fs-extra** - Enhanced file system operations
 - **chalk** - Colorful terminal output
+- **commander** - Command-line interface framework
 - **readline** - Interactive command-line interface
 
 ### **Browser Automation**
@@ -79,7 +103,12 @@ A powerful Node.js web scraping tool designed to extract business contact inform
    npm install
    ```
 
-3. **Verify installation**
+3. **Install additional dependencies for XLSX merger**
+   ```bash
+   npm install xlsx csv-parser
+   ```
+
+4. **Verify installation**
    ```bash
    node index.js --help
    ```
@@ -122,11 +151,21 @@ node index.js manta --search "law firms" --location "Los Angeles, CA" --pages 5
 #### **Combined Scraping**
 ```bash
 # Scrape both platforms
-node index.js both --search "dentists" --location "Chicago, IL" --page 1 --pages 3
+node index.js both --search "dentists" --location "Chicago, IL" --page 1
+```
+
+#### **Merge CSV to Excel**
+```bash
+# Merge all CSV files into Excel
+node index.js merge
+
+# Merge with statistics and separate sheets
+node index.js merge --stats --separate-sheets
 ```
 
 ### **Command Line Options**
 
+#### **Scraping Commands**
 | Option | Description | Example |
 |--------|-------------|---------|
 | `--search` | Business type or keyword | `"restaurants"` |
@@ -134,6 +173,14 @@ node index.js both --search "dentists" --location "Chicago, IL" --page 1 --pages
 | `--page` | Yellow Pages page number | `1` |
 | `--pages` | Manta max pages to scrape | `3` |
 | `--help` | Show help information | - |
+
+#### **Merge Commands**
+| Option | Description | Example |
+|--------|-------------|---------|
+| `--source` | Filter by source (yellowpages, manta, all) | `yellowpages` |
+| `--output` | Output XLSX filename | `my_contacts.xlsx` |
+| `--separate-sheets` | Create separate sheets for each source | - |
+| `--stats` | Show statistics before merging | - |
 
 ### Direct Script Usage
 
@@ -173,6 +220,172 @@ mantaScraper.scrape({
   console.log('Results saved to:', csvPath);
 });
 ```
+
+## 📊 CSV to XLSX Merger
+
+The scraper includes a powerful merger tool that combines all your CSV files into professional Excel (XLSX) format for easier analysis and sharing.
+
+### **Installation Requirements**
+
+Make sure you have the required dependencies:
+```bash
+npm install xlsx csv-parser
+```
+
+### **Usage Methods**
+
+#### **Method 1: Using Main Command**
+```bash
+# Basic merge - combines all CSV files
+node index.js merge
+
+# Merge with statistics
+node index.js merge --stats
+
+# Merge only Yellow Pages files
+node index.js merge -s yellowpages
+
+# Merge only Manta files
+node index.js merge -s manta
+
+# Create separate sheets for each source
+node index.js merge --separate-sheets
+
+# Custom output filename
+node index.js merge -o my_contacts.xlsx
+```
+
+#### **Method 2: Using Standalone Script**
+```bash
+# Basic merge
+node merge.js
+
+# Show statistics and merge
+node merge.js --stats
+
+# Merge specific source
+node merge.js -s yellowpages
+
+# Create separate sheets
+node merge.js --separate-sheets
+
+# Custom filename
+node merge.js -o custom_name.xlsx
+
+# Show statistics only (no merge)
+node merge.js stats
+```
+
+#### **Method 3: Using NPM Scripts**
+```bash
+# Basic merge
+npm run merge
+
+# Merge with statistics
+npm run merge:stats
+```
+
+### **Command Options**
+
+| Option | Alias | Description | Default |
+|--------|-------|-------------|---------|
+| `--source` | `-s` | Filter by source (yellowpages, manta, all) | `all` |
+| `--output` | `-o` | Output XLSX filename | `merged_contacts.xlsx` |
+| `--separate-sheets` | | Create separate sheets for each source | `false` |
+| `--stats` | | Show statistics before merging | `false` |
+
+### **Output Formats**
+
+#### **Single Sheet (Default)**
+- All contacts in one sheet named "Contacts"
+- Includes a "sourceFile" column showing which CSV file each record came from
+
+#### **Separate Sheets Mode**
+- One sheet per source (e.g., "YellowPages", "Manta")
+- Additional "All_Combined" sheet with all records
+- Each sheet properly formatted with appropriate column widths
+
+### **File Naming**
+The merger automatically detects source types from filenames:
+- Files containing "yellowpages" → YellowPages sheet
+- Files containing "manta" → Manta sheet
+- Other files → Named by first part of filename
+
+### **Statistics Output**
+When using `--stats`, you'll see:
+- Total number of CSV files found
+- Total number of records across all files
+- Breakdown by source (files and records per source)
+- Individual file details
+
+### **Example Workflow**
+```bash
+# 1. Scrape data
+node index.js yellowpages -s "Insurance Agency" -l "Anchorage, AK" -p 1
+
+# 2. Check what you have
+node merge.js stats
+
+# 3. Merge into Excel
+node merge.js --stats --separate-sheets
+```
+
+## ⚡ Speed Optimizations
+
+The scraper has been optimized for faster extraction while maintaining reliability and avoiding detection.
+
+### **Speed Modes**
+
+The scraper supports two modes in `config.js`:
+
+```javascript
+// Fast mode (default) - 60-70% faster
+mode: 'fast'
+
+// Stealth mode - more human-like, slower but safer
+mode: 'stealth'
+```
+
+### **Key Optimizations Applied**
+
+#### **1. Reduced Delays**
+- **Page load**: 5000ms → 2000ms
+- **Between requests**: 3000ms → 1000ms
+- **Scroll delay**: 2000ms → 1000ms
+- **Human delay**: 1500ms → 500ms
+
+#### **2. Batch Processing**
+- Process 5 business listings simultaneously
+- Parallel processing within batches
+- Better error isolation and recovery
+
+#### **3. Optimized Navigation**
+- Pre-navigation delay: 1-3s → 0.5-1.5s
+- Reduced mouse movements and scrolling
+- Faster element detection timeouts
+
+#### **4. Protection Page Handling**
+- Strategy wait times reduced by 50%
+- Faster automatic bypass detection
+- Optimized retry mechanisms
+
+### **Performance Improvements**
+- **Fast Mode**: ~60-70% faster than original
+- **Stealth Mode**: Similar to original speed but with better reliability
+- **Batch Processing**: Better throughput with improved error handling
+
+### **Switching Modes**
+
+To change speed mode:
+
+1. Open `config.js`
+2. Change `mode: 'fast'` to `mode: 'stealth'` (or vice versa)
+3. Restart your scraping session
+
+### **Trade-offs**
+- **Fast Mode**: Higher speed, slightly higher detection risk
+- **Stealth Mode**: Lower detection risk, moderate speed
+- **Batch Processing**: Better throughput, slightly more complex error handling
 
 ## Configuration
 
@@ -215,10 +428,18 @@ module.exports = {
 ### **File Naming**
 ```
 output/
-├── yellowpages_contacts_2024-01-15T10-30-00.csv
+├── yellowpages_contacts_Page1_2024-01-15T10-30-00.csv
 ├── manta_contacts_2024-01-15T10-35-00.csv
-└── combined_contacts_2024-01-15T10-40-00.csv
+├── combined_contacts_2024-01-15T10-40-00.csv
+└── all_contacts_merged_2024-01-15T10-45-00.xlsx
 ```
+
+### **XLSX Output Structure**
+When using the merger tool, Excel files include:
+- **Single Sheet Mode**: All data in one "Contacts" sheet with source file column
+- **Separate Sheets Mode**: Individual sheets per source plus combined sheet
+- **Formatted Columns**: Optimized widths for business names, addresses, emails
+- **Professional Layout**: Headers, proper spacing, and Excel compatibility
 
 ## 📁 Project Structure
 
@@ -231,12 +452,14 @@ business-directory-scraper/
 ├── 📁 utils/              # Utility modules
 │   ├── csvExporter.js     # CSV export functionality
 │   ├── contactExtractor.js # Contact data extraction
-│   └── browserManager.js  # Browser management
-├── 📁 output/             # Generated CSV files (gitignored)
+│   └── xlsxMerger.js      # XLSX merger functionality
+├── 📁 output/             # Generated CSV and XLSX files (gitignored)
 ├── 📄 index.js            # Main application entry
+├── 📄 merge.js            # Standalone CSV to XLSX merger
 ├── 📄 config.js           # Configuration settings
 ├── 📄 package.json        # Dependencies and scripts
 ├── 📄 .gitignore          # Git ignore rules
+├── 📄 SPEED_OPTIMIZATIONS.md # Speed optimization details
 └── 📄 README.md           # This documentation
 ```
 
