@@ -149,8 +149,6 @@ node index.js yellowpages --search "restaurants" --location "New York, NY" --pag
 node index.js yellowpages --search "Insurance Agency" --location "Anchorage, AK" --pages 2
 ```
 
-
-
 #### **Merge CSV to Excel**
 ```bash
 # Merge all CSV files into Excel
@@ -180,7 +178,7 @@ node index.js merge --stats --separate-sheets
 
 ### Direct Script Usage
 
-You can also run the scrapers directly:
+You can also run the scraper directly:
 
 ```bash
 # Yellow Pages
@@ -226,8 +224,6 @@ node index.js merge --stats
 
 # Merge only Yellow Pages files
 node index.js merge -s yellowpages
-
-
 
 # Create separate sheets for each source
 node index.js merge --separate-sheets
@@ -432,165 +428,76 @@ output/
 node merge-city.js list
 ```
 
-Output example:
-```
-📋 Available city directories:
-
-📁 YellowPages/
-   └── Talkeetna AK (4 CSV files)
-   └── Anchorage AK (14 CSV files)
-
-📁 Manta/
-   └── Miami FL (2 CSV files)
-```
-
-### **Example Workflows**
-
-#### **Workflow 1: Quick City Merge**
-```bash
-# 1. Scrape data for a city
-node index.js yellowpages -s "restaurants" -l "Talkeetna, AK" -p 1
-
-# 2. Merge the city files
-node merge-city.js Talkeetna
-
-# 3. Check the output
-# File created: output/YellowPages/Talkeetna AK/Final_Talkeetna_AK_Data.xlsx
-```
-
-#### **Workflow 2: Multiple Cities**
-```bash
-# Merge multiple cities quickly
-node merge-city.js Talkeetna
-node merge-city.js Anchorage
-node merge-city.js Fairbanks
-```
-
-#### **Workflow 3: Custom Source and Output**
-```bash
-# Merge Manta data with custom filename
-node merge-city.js city Miami --source Manta --output "Miami_Restaurants_2024.xlsx"
-```
-
-### **Error Handling**
-
-The city merger includes comprehensive error handling:
-
-- **City Not Found**: Shows available cities if search fails
-- **No CSV Files**: Warns if directory exists but contains no CSV files
-- **Empty Data**: Handles directories with CSV files containing no data
-- **Permission Errors**: Clear error messages for file access issues
-
-### **Integration with Main Scraper**
-
-The city merger integrates seamlessly with the main scraping workflow:
-
-```bash
-# Complete workflow example
-node index.js yellowpages -s "Insurance Agency" -l "Talkeetna, AK" -p 1
-node merge-city.js Talkeetna
-```
-
-This creates organized, city-specific Excel files that are perfect for:
-- Local business analysis
-- Territory-based lead generation
-- City-specific market research
-- Regional sales reporting
-
 ## ⚡ Speed Optimizations
 
-The scraper has been optimized for faster extraction while maintaining reliability and avoiding detection.
+The scraper includes several performance optimizations for faster data extraction:
 
-### **Speed Modes**
+### **Browser Optimizations**
+- Disabled images and CSS loading
+- Reduced network timeouts
+- Optimized viewport settings
+- Smart resource blocking
 
-The scraper supports two modes in `config.js`:
+### **Scraping Optimizations**
+- Parallel processing where possible
+- Intelligent wait strategies
+- Optimized selector strategies
+- Memory management
 
-```javascript
-// Fast mode (default) - 60-70% faster
-mode: 'fast'
+### **Rate Limiting**
+- Built-in delays between requests
+- Respectful scraping practices
+- Configurable timing settings
 
-// Stealth mode - more human-like, slower but safer
-mode: 'stealth'
-```
+For detailed optimization settings, see [SPEED_OPTIMIZATIONS.md](SPEED_OPTIMIZATIONS.md)
 
-### **Key Optimizations Applied**
+## ⚙️ Configuration
 
-#### **1. Reduced Delays**
-- **Page load**: 5000ms → 2000ms
-- **Between requests**: 3000ms → 1000ms
-- **Scroll delay**: 2000ms → 1000ms
-- **Human delay**: 1500ms → 500ms
-
-#### **2. Batch Processing**
-- Process 5 business listings simultaneously
-- Parallel processing within batches
-- Better error isolation and recovery
-
-#### **3. Optimized Navigation**
-- Pre-navigation delay: 1-3s → 0.5-1.5s
-- Reduced mouse movements and scrolling
-- Faster element detection timeouts
-
-#### **4. Protection Page Handling**
-- Strategy wait times reduced by 50%
-- Faster automatic bypass detection
-- Optimized retry mechanisms
-
-### **Performance Improvements**
-- **Fast Mode**: ~60-70% faster than original
-- **Stealth Mode**: Similar to original speed but with better reliability
-- **Batch Processing**: Better throughput with improved error handling
-
-### **Switching Modes**
-
-To change speed mode:
-
-1. Open `config.js`
-2. Change `mode: 'fast'` to `mode: 'stealth'` (or vice versa)
-3. Restart your scraping session
-
-### **Trade-offs**
-- **Fast Mode**: Higher speed, slightly higher detection risk
-- **Stealth Mode**: Lower detection risk, moderate speed
-- **Batch Processing**: Better throughput, slightly more complex error handling
-
-## Configuration
-
-Edit `config.js` to customize:
-
-- Browser settings (headless mode, viewport size)
-- Scraping delays
-- Output directory and CSV headers
-- User agents for rotation
+### **Browser Settings**
+The scraper uses optimized browser settings defined in `config.js`:
 
 ```javascript
 module.exports = {
   browser: {
-    headless: true, // Set to false for debugging
-    // ... other browser options
+    headless: true,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--no-first-run',
+      '--no-zygote',
+      '--disable-gpu'
+    ]
   },
   delays: {
     pageLoad: 3000,
-    betweenRequests: 2000,
-    // ... other delays
-  },
-  // ... other settings
+    betweenActions: 1000,
+    betweenPages: 2000
+  }
 };
 ```
 
-## 📊 Output Format
+### **Customization**
+You can modify the configuration by editing `config.js` to adjust:
+- Browser launch options
+- Timing delays
+- User agent strings
+- Viewport settings
+
+## 📄 Output Format
 
 ### **CSV Structure**
+Each CSV file contains the following columns:
+
 | Column | Description | Example |
 |--------|-------------|---------|
-| S.no | Serial number | `1` |
-| Business Name | Company name | `"Joe's Pizza"` |
-| Website | Business website | `"https://joespizza.com"` |
-| Address | Physical address | `"123 Main St, New York, NY"` |
-| Email | Contact email | `"info@joespizza.com"` |
-| Phone | Phone number | `"(555) 123-4567"` |
-| Source | Scraping source | `"yellowpages"` |
-| Scraped At | Timestamp | `"2024-01-15T10:30:00.000Z"` |
+| `S.no` | Serial number | `1` |
+| `Name` | Business name | `"Joe's Pizza"` |
+| `Phone` | Phone number | `"(555) 123-4567"` |
+| `Address` | Full address | `"123 Main St, New York, NY 10001"` |
+| `Website` | Website URL | `"https://joespizza.com"` |
+| `Email` | Email address | `"info@joespizza.com"` |
 
 ### **File Naming Convention**
 CSV files are automatically named using the pattern:
@@ -610,115 +517,90 @@ output/
     └── {City} {State}/
         ├── yellowpages_{city}_{state}_contacts_Page1.csv
         ├── yellowpages_{city}_{state}_contacts_Page2.csv
-└── all_contacts_merged_2024-01-15T10-45-00.xlsx
+        └── Final_{City}_{State}_Data.xlsx
 ```
-
-### **XLSX Output Structure**
-When using the merger tool, Excel files include:
-- **Single Sheet Mode**: All data in one "Contacts" sheet with source file column
-- **Separate Sheets Mode**: Individual sheets per source plus combined sheet
-- **Formatted Columns**: Optimized widths for business names, addresses, emails
-- **Professional Layout**: Headers, proper spacing, and Excel compatibility
 
 ## 📁 Project Structure
 
 ```
 business-directory-scraper/
-├── 📁 scrapers/           # Scraping modules
-│   ├── yellowpages.js     # Yellow Pages scraper
-│   └── baseScraper.js     # Base scraper class
-├── 📁 utils/              # Utility modules
-│   ├── csvExporter.js     # CSV export functionality
-│   ├── contactExtractor.js # Contact data extraction
-│   └── xlsxMerger.js      # XLSX merger functionality
-├── 📁 output/             # Generated CSV and XLSX files (gitignored)
-│   └── YellowPages/       # YellowPages data organized by city
-│       ├── Talkeetna AK/  # City-specific CSV and Excel files
-│       └── Anchorage AK/  # City-specific CSV and Excel files
-├── 📄 index.js            # Main application entry
-├── 📄 merge.js            # Standalone CSV to XLSX merger
-├── 📄 merge-city.js       # City-specific CSV to XLSX merger
-├── 📄 config.js           # Configuration settings
-├── 📄 package.json        # Dependencies and scripts
-├── 📄 .gitignore          # Git ignore rules
-├── 📄 SPEED_OPTIMIZATIONS.md # Speed optimization details
-└── 📄 README.md           # This documentation
+├── scrapers/
+│   ├── baseScraper.js          # Base scraper class
+│   └── yellowpages.js          # Yellow Pages scraper
+├── utils/
+│   ├── csvExporter.js          # CSV file operations
+│   ├── contactExtractor.js     # Contact data extraction
+│   └── xlsxMerger.js          # Excel merger utility
+├── output/                     # Generated CSV and Excel files
+├── config.js                   # Configuration settings
+├── index.js                    # Main CLI application
+├── merge.js                    # Standalone merger script
+├── merge-city.js              # City-specific merger
+├── package.json               # Dependencies and scripts
+├── README.md                  # This file
+├── MERGE_USAGE.md            # Detailed merger documentation
+└── SPEED_OPTIMIZATIONS.md    # Performance optimization guide
 ```
-
-## 🔧 Advanced Features
-
-### **Hidden Email Extraction**
-The tool can extract email addresses hidden behind "More Info" sections that typically open email clients:
-- Detects mailto links in expandable sections
-- Extracts emails from onclick attributes
-- Handles dynamic content loading
-
-### **Duplicate Prevention**
-- Unique business identification using multiple factors
-- Cross-platform duplicate detection
-- Memory-efficient processing
-
-### **Error Recovery**
-- Automatic retry mechanisms
-- Graceful handling of network issues
-- Detailed error logging
 
 ## 🤝 Contributing
 
-We welcome contributions! Please follow these guidelines:
+We welcome contributions! Please follow these steps:
 
 1. **Fork the repository**
-2. **Create a feature branch** (`git checkout -b feature/amazing-feature`)
-3. **Commit your changes** (`git commit -m 'Add amazing feature'`)
-4. **Push to the branch** (`git push origin feature/amazing-feature`)
-5. **Open a Pull Request**
+2. **Create a feature branch**
+   ```bash
+   git checkout -b feature/amazing-feature
+   ```
+3. **Make your changes**
+4. **Test thoroughly**
+5. **Commit your changes**
+   ```bash
+   git commit -m 'Add amazing feature'
+   ```
+6. **Push to the branch**
+   ```bash
+   git push origin feature/amazing-feature
+   ```
+7. **Open a Pull Request**
 
 ### **Development Guidelines**
-- Follow existing code style and patterns
+- Follow existing code style
 - Add comments for complex logic
-- Test thoroughly before submitting
+- Test with multiple search terms and locations
+- Ensure error handling is robust
 - Update documentation as needed
 
 ## ⚖️ Legal Notice
 
-### **Important Disclaimers**
+### **Important Disclaimer**
+This tool is designed for educational and research purposes. Users are responsible for:
 
-⚠️ **Responsible Usage Required**
-- This tool is for educational and legitimate business purposes only
-- Users must comply with website Terms of Service
-- Respect robots.txt and rate limiting
-- Obtain proper permissions when required
+- **Compliance with Terms of Service**: Always review and comply with the terms of service of websites you scrape
+- **Rate Limiting**: Use respectful scraping practices with appropriate delays
+- **Data Usage**: Ensure proper use of extracted data in accordance with applicable laws
+- **Privacy**: Respect privacy laws and regulations in your jurisdiction
 
-⚠️ **Data Privacy**
-- Handle scraped data responsibly
-- Comply with GDPR, CCPA, and local privacy laws
-- Do not store or share personal information inappropriately
-- Implement proper data security measures
-
-⚠️ **Rate Limiting**
-- Built-in delays prevent server overload
-- Do not modify timing configurations aggressively
-- Monitor your usage to avoid IP blocking
-- Use proxies if scraping at scale
+### **Ethical Scraping Practices**
+- Use reasonable delays between requests
+- Don't overload servers with excessive requests
+- Respect robots.txt files
+- Use scraped data responsibly
+- Consider reaching out to websites for API access when available
 
 ### **Liability**
-The developer of this tool are not responsible for:
-- Misuse of the software
-- Violations of website terms of service
-- Legal issues arising from improper usage
-- Data privacy violations
-
-**Use this tool responsibly and ethically.**
-
-## 📞 Support
-
-For questions, issues, or contributions:
-- 📧 Create an issue in the repository
-- 📖 Check the documentation
-- 🔍 Review existing issues and solutions
+The authors and contributors of this tool are not responsible for any misuse or legal issues arising from its use. Users assume all responsibility for their scraping activities.
 
 ---
 
-**Made with ❤️ for the business research community**
+## 📞 Support
 
-*Last updated: July 2025*
+If you encounter issues or have questions:
+
+1. **Check the documentation** in this README
+2. **Review the configuration** in `config.js`
+3. **Check for common issues** in the troubleshooting section
+4. **Open an issue** on the repository with detailed information
+
+---
+
+**Happy Scraping! 🚀**

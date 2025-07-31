@@ -39,8 +39,46 @@ class XLSXMerger {
   }
 
   /**
+   * Get CSV files from a specific directory
+   * @param {string} directoryPath - Specific directory to search
+   * @param {string} pattern - Optional pattern to filter files (e.g., 'yellowpages')
+   * @returns {Array} Array of CSV file paths
+   */
+  async getCSVFilesFromDirectory(directoryPath, pattern = null) {
+    try {
+      if (!fs.existsSync(directoryPath)) {
+        console.log(`⚠️ Directory not found: ${directoryPath}`);
+        return [];
+      }
+
+      const csvFiles = [];
+      const items = await fs.readdir(directoryPath, { withFileTypes: true });
+      
+      for (const item of items) {
+        if (item.isFile() && item.name.endsWith('.csv')) {
+          const fullPath = path.join(directoryPath, item.name);
+          csvFiles.push(fullPath);
+        }
+      }
+      
+      // Apply pattern filter if specified
+      if (pattern) {
+        return csvFiles.filter(file => {
+          const fileName = path.basename(file);
+          return fileName.toLowerCase().includes(pattern.toLowerCase());
+        });
+      }
+      
+      return csvFiles;
+    } catch (error) {
+      console.error(`❌ Error reading directory ${directoryPath}:`, error.message);
+      return [];
+    }
+  }
+
+  /**
    * Get all CSV files from output directory (including subfolders)
-   * @param {string} pattern - Optional pattern to filter files (e.g., 'yellowpages', 'manta')
+   * @param {string} pattern - Optional pattern to filter files (e.g., 'yellowpages')
    * @returns {Array} Array of CSV file paths
    */
   async getCSVFiles(pattern = null) {
@@ -186,7 +224,7 @@ class XLSXMerger {
         
         if (location.city !== 'Unknown') {
           if (pattern && pattern !== 'all') {
-            // For specific sources (yellowpages, manta), save in source/location folder
+            // For specific sources (yellowpages), save in source/location folder
             const sourceFolderName = this.getSourceFolderName(pattern);
             const locationFolderName = `${location.city} ${location.state}`;
             const targetDir = path.join(this.outputDir, sourceFolderName, locationFolderName);
@@ -225,13 +263,117 @@ class XLSXMerger {
   }
 
   /**
+   * Merge CSV files from a specific city directory
+   * @param {string} cityDirectoryPath - Path to the city directory containing CSV files
+   * @param {Object} options - Merge options
+   * @param {string} options.outputFileName - Name for the output XLSX file (optional)
+   * @param {string} options.pattern - Optional pattern to filter CSV files (default: 'yellowpages')
+   * @returns {string} Path to created XLSX file
+   */
+  async mergeCityFiles(cityDirectoryPath, options = {}) {
+    const {
+      outputFileName = null, // Will be auto-generated if not provided
+      pattern = 'yellowpages' // Default to yellowpages only
+    } = options;
+
+    try {
+      console.log(`🏙️ Merging CSV files from city directory: ${cityDirectoryPath}`);
+      
+      // Get CSV files from the specific directory
+      const csvFiles = await this.getCSVFilesFromDirectory(cityDirectoryPath, pattern);
+      
+      if (csvFiles.length === 0) {
+        console.log(`⚠️ No CSV files found in ${cityDirectoryPath}`);
+        return null;
+      }
+
+      console.log(`📁 Found ${csvFiles.length} CSV files to merge:`);
+      csvFiles.forEach(file => console.log(`  • ${path.basename(file)}`));
+
+      // Read all CSV files
+      const allData = [];
+      let totalRecords = 0;
+
+      for (const csvFile of csvFiles) {
+        const data = await this.readCSVFile(csvFile);
+        
+        if (data.length > 0) {
+          // Add source file info to each record
+          const fileName = path.basename(csvFile, '.csv');
+          const enhancedData = data.map(record => ({
+            ...record,
+            sourceFile: fileName
+          }));
+
+          allData.push(...enhancedData);
+          totalRecords += data.length;
+        }
+      }
+
+      if (allData.length === 0) {
+        console.log('⚠️ No data found in CSV files');
+        return null;
+      }
+
+      // Renumber records continuously
+      const renumberedData = allData.map((record, index) => ({
+        'S.no': index + 1,
+        ...record
+      }));
+
+      // Create workbook and worksheet
+      const workbook = XLSX.utils.book_new();
+      const worksheet = XLSX.utils.json_to_sheet(renumberedData);
+      this.formatWorksheet(worksheet);
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Contacts');
+
+      // Generate output filename if not provided
+      let finalOutputFileName = outputFileName;
+      if (!finalOutputFileName) {
+        // Extract city name and state from directory path
+        const cityStateString = path.basename(cityDirectoryPath);
+        
+        // Parse city and state (e.g., "Talkeetna AK" -> "Talkeetna" and "AK")
+        const parts = cityStateString.trim().split(/\s+/);
+        let cityName = 'Unknown';
+        let stateCode = 'XX';
+        
+        if (parts.length >= 2) {
+          // Last part is state code, everything else is city name
+          stateCode = parts[parts.length - 1];
+          cityName = parts.slice(0, -1).join('_');
+        } else if (parts.length === 1) {
+          cityName = parts[0];
+        }
+        
+        // Format: Final_CityName_StateCode_Data.xlsx
+        finalOutputFileName = `Final_${cityName}_${stateCode}_Data.xlsx`;
+      }
+
+      // Save XLSX file in the same city directory
+      const outputPath = path.join(cityDirectoryPath, finalOutputFileName);
+      XLSX.writeFile(workbook, outputPath);
+
+      console.log(`✅ Successfully merged ${csvFiles.length} CSV files into XLSX`);
+      console.log(`📁 Output file: ${outputPath}`);
+      console.log(`📊 Total records: ${totalRecords}`);
+
+      return outputPath;
+
+    } catch (error) {
+      console.error(`❌ Error merging city files from ${cityDirectoryPath}:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
    * Extract source name from filename
    * @param {string} fileName - CSV filename
    * @returns {string} Source name
    */
   extractSourceFromFileName(fileName) {
     if (fileName.includes('yellowpages')) return 'YellowPages';
-    if (fileName.includes('manta')) return 'Manta';
+
     if (fileName.includes('test')) return 'Test';
     
     // Extract first part before underscore
@@ -288,7 +430,7 @@ class XLSXMerger {
     for (const filePath of csvFiles) {
       const fileName = path.basename(filePath);
       // Look for pattern like "yellowpages_Anchorage_AK_contacts_Page1.csv"
-      const match = fileName.match(/(?:yellowpages|manta)_([^_]+)_([^_]+)_contacts/);
+      const match = fileName.match(/(?:yellowpages)_([^_]+)_([^_]+)_contacts/);
       if (match) {
         return {
           city: match[1],
@@ -307,7 +449,7 @@ class XLSXMerger {
   extractLocationFromFilePath(filePath) {
     const fileName = path.basename(filePath);
     // Look for pattern like "yellowpages_Anchorage_AK_contacts_Page1.csv"
-    const match = fileName.match(/(?:yellowpages|manta)_([^_]+)_([^_]+)_contacts/);
+    const match = fileName.match(/(?:yellowpages)_([^_]+)_([^_]+)_contacts/);
     if (match) {
       return {
         city: match[1],
@@ -326,8 +468,7 @@ class XLSXMerger {
     switch (source.toLowerCase()) {
       case 'yellowpages':
         return 'YellowPages';
-      case 'manta':
-        return 'Manta';
+
       default:
         return source.charAt(0).toUpperCase() + source.slice(1);
     }
@@ -335,7 +476,7 @@ class XLSXMerger {
 
   /**
    * Determine primary source from CSV files (for 'all' merges)
-   * Priority: YellowPages > Manta > Others
+   * Priority: YellowPages > Others
    * @param {Array} csvFiles - Array of CSV file paths
    * @returns {string} Primary source name
    */
@@ -343,13 +484,11 @@ class XLSXMerger {
     const sources = csvFiles.map(file => {
       const fileName = path.basename(file);
       if (fileName.toLowerCase().includes('yellowpages')) return 'yellowpages';
-      if (fileName.toLowerCase().includes('manta')) return 'manta';
       return 'unknown';
     });
 
-    // Priority order: yellowpages first, then manta
+    // Priority order: yellowpages first
     if (sources.includes('yellowpages')) return 'yellowpages';
-    if (sources.includes('manta')) return 'manta';
     return 'yellowpages'; // Default fallback
   }
 

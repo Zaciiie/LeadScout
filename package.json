@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "scrape:yellowpages": "node scrapers/yellowpages.js",
-    "scrape:manta": "node scrapers/manta.js",
+
     "merge": "node merge.js",
     "merge:stats": "node merge.js --stats",
     "test": "echo \"Error: no test specified\" && exit 1"

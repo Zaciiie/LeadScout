@@ -22,7 +22,7 @@ console.log(chalk.cyan(banner));
 
 program
   .name('web-scraper')
-  .description('Extract contact information from business directories')
+  .description('Extract contact information from Yellow Pages')
   .version('1.0.0');
 
 // Yellow Pages scraping command
@@ -100,74 +100,12 @@ program
     }
   });
 
-
-
-
-
 // Merge CSV files to XLSX command
 program
   .command('merge')
   .alias('xlsx')
   .description('Merge all CSV files into one XLSX file')
-  .option('-s, --source <source>', 'Filter by source (yellowpages, manta, or all)', 'all')
-  .option('-o, --output <filename>', 'Output XLSX filename', 'merged_contacts.xlsx')
-  .option('--separate-sheets', 'Create separate sheets for each source', false)
-  .option('--stats', 'Show statistics about CSV files before merging', false)
-  .action(async (options) => {
-    console.log(chalk.green('📊 Starting CSV to XLSX merge process...'));
-    console.log(chalk.gray(`Source filter: ${options.source}`));
-    console.log(chalk.gray(`Output file: ${options.output}`));
-    console.log(chalk.gray(`Separate sheets: ${options.separateSheets ? 'Yes' : 'No'}`));
-    console.log('');
-
-    const merger = new XLSXMerger();
-    
-    try {
-      // Show statistics if requested
-      if (options.stats) {
-        console.log(chalk.cyan('📈 Getting CSV file statistics...'));
-        const stats = await merger.getStatistics();
-        
-        if (stats) {
-          console.log(chalk.green(`\n📁 Found ${stats.totalFiles} CSV files with ${stats.totalRecords} total records:`));
-          
-          // Show by source
-          Object.keys(stats.sources).forEach(source => {
-            const sourceStats = stats.sources[source];
-            console.log(chalk.blue(`  • ${source}: ${sourceStats.files} files, ${sourceStats.records} records`));
-          });
-          
-          // Show individual files
-          console.log(chalk.gray('\nIndividual files:'));
-          stats.files.forEach(file => {
-            console.log(chalk.gray(`  • ${file.name} (${file.records} records)`));
-          });
-          console.log('');
-        } else {
-          console.log(chalk.yellow('⚠️ Could not get statistics'));
-        }
-      }
-      
-      // Perform merge
-      const xlsxPath = await merger.mergeBySource(options.source, options.separateSheets);
-      
-      if (xlsxPath) {
-        console.log(chalk.green(`\n🎉 Success! XLSX file created: ${xlsxPath}`));
-      } else {
-        console.log(chalk.yellow('\n⚠️ No CSV files found to merge'));
-      }
-    } catch (error) {
-      console.error(chalk.red(`\n❌ Error: ${error.message}`));
-      process.exit(1);
-    }
-  });
-
-// Merge CSV files to XLSX command
-program
-  .command('merge')
-  .alias('xlsx')
-  .description('Merge all CSV files into one XLSX file')
-  .option('-s, --source <source>', 'Filter by source (yellowpages, manta, or all)', 'all')
+  .option('-s, --source <source>', 'Filter by source (yellowpages or all)', 'all')
   .option('-o, --output <filename>', 'Output XLSX filename', 'merged_contacts.xlsx')
   .option('--separate-sheets', 'Create separate sheets for each source', false)
   .option('--stats', 'Show statistics about CSV files before merging', false)
@@ -244,79 +182,32 @@ program
 
       const searchTerm = await question('What would you like to search for? (e.g., restaurants, dentists): ');
       const location = await question('Where should we search? (e.g., New York, NY): ');
-      
-      console.log('\nWhich site(s) would you like to scrape?');
-      console.log('1. Yellow Pages only (single page)');
-      console.log('2. Manta only (multiple pages)');
-      console.log('3. Both sites');
-      
-      const siteChoice = await question('\nEnter your choice (1-3): ');
-      
-      let pageNumber, maxPages;
-      if (siteChoice === '1') {
-        pageNumber = await question('Which page number would you like to scrape? (default: 1): ') || '1';
-      } else if (siteChoice === '2') {
-        maxPages = await question('How many pages would you like to scrape? (default: 3): ') || '3';
-      } else if (siteChoice === '3') {
-        pageNumber = await question('Which Yellow Pages page number? (default: 1): ') || '1';
-        maxPages = await question('How many Manta pages? (default: 3): ') || '3';
-      }
+      const pageNumber = await question('Which page number would you like to scrape? (default: 1): ') || '1';
 
       rl.close();
 
       console.log(chalk.cyan('\n🚀 Starting scraping with your settings...'));
       console.log(chalk.gray(`Search: ${searchTerm || 'restaurants'}`));
       console.log(chalk.gray(`Location: ${location || 'New York, NY'}`));
-      if (pageNumber) console.log(chalk.gray(`Yellow Pages Page: ${pageNumber}`));
-      if (maxPages) console.log(chalk.gray(`Manta Max Pages: ${maxPages}`));
+      console.log(chalk.gray(`Yellow Pages Page: ${pageNumber}`));
       console.log('');
 
-      const results = [];
-
-      if (siteChoice === '1' || siteChoice === '3') {
-        try {
-          console.log(chalk.yellow('🟡 Starting Yellow Pages...'));
-          const ypScraper = new YellowPagesScraper();
-          const ypCsvPath = await ypScraper.scrape({
-            searchTerm: searchTerm || 'restaurants',
-            location: location || 'New York, NY',
-            pageNumber: parseInt(pageNumber) || 1
-          });
-          if (ypCsvPath) {
-            results.push(`Yellow Pages: ${ypCsvPath}`);
-          }
-        } catch (error) {
-          console.error(chalk.red(`❌ Yellow Pages error: ${error.message}`));
-        }
-      }
-
-      if (siteChoice === '2' || siteChoice === '3') {
-        if (siteChoice === '3') console.log(''); // Empty line
-        try {
-          console.log(chalk.blue('🔵 Starting Manta...'));
-          const mantaScraper = new MantaScraper();
-          const mantaCsvPath = await mantaScraper.scrape({
-            searchTerm: searchTerm || 'restaurants',
-            location: location || 'New York, NY',
-            maxPages: parseInt(maxPages) || 3
-          });
-          if (mantaCsvPath) {
-            results.push(`Manta: ${mantaCsvPath}`);
-          }
-        } catch (error) {
-          console.error(chalk.red(`❌ Manta error: ${error.message}`));
-        }
-      }
-
-      // Show results
-      console.log(chalk.green('\n🎉 Scraping completed!'));
-      if (results.length > 0) {
-        console.log(chalk.green('\nResults exported to:'));
-        results.forEach(result => {
-          console.log(chalk.green(`  • ${result}`));
+      try {
+        console.log(chalk.yellow('🟡 Starting Yellow Pages...'));
+        const ypScraper = new YellowPagesScraper();
+        const ypCsvPath = await ypScraper.scrape({
+          searchTerm: searchTerm || 'restaurants',
+          location: location || 'New York, NY',
+          pageNumber: parseInt(pageNumber)
         });
-      } else {
-        console.log(chalk.yellow('⚠️ No results were exported'));
+        
+        if (ypCsvPath) {
+          console.log(chalk.green(`\n🎉 Success! Results exported to: ${ypCsvPath}`));
+        } else {
+          console.log(chalk.yellow('\n⚠️ No contacts found to export'));
+        }
+      } catch (error) {
+        console.error(chalk.red(`❌ Yellow Pages error: ${error.message}`));
       }
 
     } catch (error) {
